@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lite-dnd // reparent stress bench</title>
+
+<!--
+  Dependencies load from the jsdelivr CDN (always the published version, nothing to bundle).
+  lite-dnd stays local (../Dnd.js) so the demo runs the source in this folder.
+  Single shared lite-signal instance: lite-element is served RAW (no /+esm), so its bare
+  "@zakkster/lite-signal" import resolves through THIS import map to the same module lite-dnd uses.
+
+  OFFLINE FALLBACK -- if the CDN is unreachable, swap the two CDN lines for the bundled copies
+  (included in this folder under node_modules/ for exactly this purpose):
+    "@zakkster/lite-signal": "../node_modules/@zakkster/lite-signal/Signal.js",
+    "@zakkster/lite-element": "../node_modules/@zakkster/lite-element/Element.js",
+
+  Serve over http (file:// will not load ES modules):  python3 -m http.server 8000  then open /demo/
+-->
+  <script type="importmap">
+{
+  "imports": {
+    "@zakkster/lite-signal": "https://cdn.jsdelivr.net/npm/@zakkster/lite-signal@1.1.4/+esm",
+    "@zakkster/lite-element": "https://cdn.jsdelivr.net/npm/@zakkster/lite-element@1.0.0",
+    "@zakkster/lite-dnd": "../Dnd.js"
+  }
+}
+
+  </script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;0,800;1,400&display=swap" rel="stylesheet" />
+
+<style>
+  :root {
+    --bg: #070b0a;
+    --bg-2: #0a1110;
+    --panel: #0c1413;
+    --panel-2: #0f1a18;
+    --inset: #060a09;
+    --ink: #cfe6dd;
+    --ink-dim: #6f8a81;
+    --green: #5fe39f;
+    --green-dim: #2f7d5a;
+    --amber: #f5b942;
+    --amber-dim: #8a6a25;
+    --red: #ff6b6b;
+    --grid: rgba(95, 227, 159, 0.05);
+    --line: rgba(95, 227, 159, 0.16);
+    --line-2: rgba(95, 227, 159, 0.30);
+    --glow: 0 0 10px rgba(95, 227, 159, 0.45);
+    --glow-amber: 0 0 10px rgba(245, 185, 66, 0.45);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { margin: 0; }
+
+  body {
+    font-family: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+    color: var(--ink);
+    background:
+      radial-gradient(120% 80% at 50% -10%, rgba(95, 227, 159, 0.06), transparent 60%),
+      radial-gradient(140% 120% at 50% 120%, rgba(0, 0, 0, 0.7), transparent 50%),
+      var(--bg);
+    min-height: 100vh;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  /* CRT grid + scanline + vignette atmosphere */
+  body::before {
+    content: "";
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 32px 32px, 32px 32px;
+    mask-image: radial-gradient(120% 100% at 50% 30%, #000 55%, transparent 100%);
+  }
+  body::after {
+    content: "";
+    position: fixed; inset: 0; z-index: 50; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,0.16) 0 1px, transparent 1px 3px);
+    mix-blend-mode: multiply;
+    opacity: 0.5;
+  }
+
+  .wrap { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 40px 24px 72px; }
+
+  /* ---- header ---- */
+  header {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    gap: 24px; flex-wrap: wrap;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 22px; margin-bottom: 30px;
+    opacity: 0; animation: rise .7s ease forwards;
+  }
+  .brand h1 {
+    font-size: clamp(34px, 6vw, 58px); font-weight: 800; letter-spacing: -0.02em;
+    margin: 0; color: var(--green); text-shadow: var(--glow);
+  }
+  .brand h1 b { color: var(--ink); font-weight: 800; }
+  .brand .tag { margin: 6px 0 0; color: var(--ink-dim); font-size: 13px; letter-spacing: 0.04em; }
+  .rack { display: flex; gap: 10px; flex-wrap: wrap; }
+  .chip {
+    border: 1px solid var(--line); background: var(--panel);
+    padding: 7px 11px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ink-dim); display: flex; align-items: center; gap: 8px;
+  }
+  .chip b { color: var(--green); font-weight: 700; }
+  .led { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: var(--glow); }
+
+  /* ---- panel scaffolding ---- */
+  .grid { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 22px; align-items: start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  .col { display: grid; gap: 22px; }
+
+  .panel {
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--line);
+    box-shadow: inset 0 1px 0 rgba(95,227,159,0.06), 0 18px 40px rgba(0,0,0,0.45);
+    opacity: 0; animation: rise .7s ease forwards;
+  }
+  .panel:nth-child(1) { animation-delay: .08s; }
+  .panel:nth-child(2) { animation-delay: .16s; }
+  .panel:nth-child(3) { animation-delay: .24s; }
+  .phead {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 12px 16px; border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, rgba(95,227,159,0.05), transparent);
+  }
+  .phead .name { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--green); font-weight: 700; }
+  .phead .meta { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-dim); }
+  .pbody { padding: 18px 16px; }
+  .hint { font-size: 11.5px; color: var(--ink-dim); margin: 0 0 16px; letter-spacing: 0.02em; }
+  .hint b { color: var(--amber); font-weight: 500; }
+
+  /* ---- panel 1: sortable channels ---- */
+  #board { display: grid; gap: 10px; }
+  scope-channel {
+    display: grid;
+    grid-template-columns: auto auto 1fr auto auto auto;
+    align-items: center; gap: 14px;
+    padding: 12px 14px;
+    background: var(--inset);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--green-dim);
+    transition: box-shadow .15s ease, border-color .15s ease, transform .06s ease, opacity .12s ease;
+    user-select: none;
+  }
+  scope-channel[data-dragging] {
+    border-color: var(--green); border-left-color: var(--green);
+    box-shadow: 0 0 0 1px var(--green), 0 14px 30px rgba(0,0,0,0.6), var(--glow);
+    opacity: 0.96; transform: scale(1.012);
+  }
+  scope-channel .grip {
+    cursor: grab; color: var(--green-dim); letter-spacing: -2px; font-weight: 800;
+    padding: 0 4px; font-size: 18px; line-height: 1;
+  }
+  scope-channel[data-dragging] .grip { cursor: grabbing; color: var(--green); }
+  scope-channel .ch { color: var(--ink); font-weight: 700; font-size: 13px; letter-spacing: 0.06em; min-width: 44px; }
+  scope-channel .ch span { color: var(--green); }
+  scope-channel .field { display: flex; align-items: center; gap: 8px; }
+  scope-channel .flabel { font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-dim); }
+  scope-channel output { font-variant-numeric: tabular-nums; color: var(--amber); text-shadow: var(--glow-amber); font-weight: 700; font-size: 13px; min-width: 30px; text-align: right; }
+  scope-channel .ut { color: var(--green); text-shadow: var(--glow); min-width: 52px; }
+  scope-channel button {
+    width: 24px; height: 24px; border: 1px solid var(--line-2); background: var(--panel);
+    color: var(--green); font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer;
+    border-radius: 2px; line-height: 1; transition: background .12s, box-shadow .12s;
+  }
+  scope-channel button:hover { background: rgba(95,227,159,0.10); box-shadow: var(--glow); }
+  scope-channel button:active { background: rgba(95,227,159,0.22); }
+  scope-channel input.name {
+    background: var(--bg); border: 1px solid var(--line); color: var(--ink);
+    font-family: inherit; font-size: 12px; padding: 5px 8px; width: 100%; min-width: 90px; border-radius: 2px;
+  }
+  scope-channel input.name:focus { outline: none; border-color: var(--green); box-shadow: var(--glow); }
+  scope-channel input.name::placeholder { color: var(--ink-dim); }
+  scope-channel .born {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-dim);
+    border: 1px solid var(--line); padding: 3px 6px; border-radius: 2px; white-space: nowrap;
+  }
+  scope-channel .born span { color: var(--amber); font-weight: 700; }
+
+  .readline { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--line); font-size: 11px; letter-spacing: 0.04em; }
+  .readline .k { color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.1em; font-size: 10px; }
+  .readline .v { font-variant-numeric: tabular-nums; }
+  .big { font-size: 15px; font-weight: 800; }
+  .ok { color: var(--green); text-shadow: var(--glow); }
+  .seq { color: var(--amber); text-shadow: var(--glow-amber); font-weight: 700; letter-spacing: 0.2em; }
+
+  /* ---- panel 2: monitor ---- */
+  .scope {
+    position: relative; height: 168px; background: var(--inset);
+    border: 1px solid var(--line); overflow: hidden;
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px),
+      linear-gradient(rgba(95,227,159,0.10), transparent 40%);
+    background-size: 22px 22px, 22px 22px, 100% 100%;
+  }
+  .scope .axis { position: absolute; background: var(--line); }
+  .scope .axis.h { left: 0; right: 0; top: 50%; height: 1px; }
+  .scope .axis.v { top: 0; bottom: 0; left: 50%; width: 1px; }
+  .scope .sweep { position: absolute; top: 0; bottom: 0; width: 2px; left: 0; background: linear-gradient(transparent, var(--green), transparent); opacity: 0.5; animation: sweep 3.4s linear infinite; }
+  .scope .dot {
+    position: fixed; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%;
+    background: var(--green); box-shadow: 0 0 14px 4px rgba(95,227,159,0.6); opacity: 0; transition: opacity .12s; pointer-events: none;
+  }
+  .scope .stamp { position: absolute; left: 10px; top: 8px; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-dim); }
+  .mon-rows { margin-top: 14px; display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  .mon-row { display: grid; grid-template-columns: 92px 1fr; background: var(--inset); padding: 9px 12px; font-size: 12px; }
+  .mon-row .k { color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.1em; font-size: 10px; align-self: center; }
+  .mon-row .val { font-variant-numeric: tabular-nums; word-break: break-all; }
+  #mon-status { font-weight: 800; letter-spacing: 0.1em; color: var(--ink-dim); }
+  #mon-status.live { color: var(--green); text-shadow: var(--glow); animation: flick 1.1s steps(2) infinite; }
+  #mon-status.live::before { content: "> "; }
+  #mon-payload { color: var(--amber); }
+  #mon-over { color: var(--green); }
+
+  /* ---- panel 3: drag/drop bus ---- */
+  .tokens { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+  .token {
+    cursor: grab; padding: 9px 14px; border: 1px solid var(--line-2); background: var(--panel);
+    color: var(--green); font-size: 12px; font-weight: 700; letter-spacing: 0.08em; border-radius: 2px;
+    position: relative; z-index: 2; transition: box-shadow .12s, border-color .12s;
+    will-change: transform;
+  }
+  .token::before { content: ":: "; color: var(--green-dim); }
+  .token:hover { box-shadow: var(--glow); }
+  .token[data-dragging] { cursor: grabbing; border-color: var(--green); box-shadow: 0 12px 28px rgba(0,0,0,0.6), var(--glow); z-index: 30; }
+  .jacks { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 460px) { .jacks { grid-template-columns: 1fr; } }
+  .jack {
+    border: 1px dashed var(--line-2); background: var(--inset); padding: 16px 12px; border-radius: 2px;
+    text-align: center; transition: border-color .12s, box-shadow .12s, background .12s;
+  }
+  .jack .jname { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; color: var(--ink); }
+  .jack .acc { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-dim); margin-top: 5px; }
+  .jack .got { font-size: 11px; color: var(--amber); margin-top: 8px; min-height: 15px; font-variant-numeric: tabular-nums; }
+  .jack.hot { border-style: solid; border-color: var(--green); background: rgba(95,227,159,0.07); box-shadow: inset 0 0 18px rgba(95,227,159,0.12), var(--glow); animation: pulse 1s ease-in-out infinite; }
+  .buslog { margin-top: 16px; border-top: 1px dashed var(--line); padding-top: 12px; }
+  .buslog .lbl { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-dim); margin-bottom: 8px; }
+  #log { list-style: none; margin: 0; padding: 0; font-size: 11.5px; display: grid; gap: 3px; min-height: 44px; }
+  #log li { color: var(--ink); font-variant-numeric: tabular-nums; }
+  #log li .t { color: var(--green-dim); }
+  #log li .a { color: var(--amber); font-weight: 700; }
+  #log li.fresh { animation: flashin .5s ease; }
+
+  footer { margin-top: 34px; padding-top: 18px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-size: 11px; color: var(--ink-dim); letter-spacing: 0.04em; }
+  footer a { color: var(--green); text-decoration: none; }
+  footer a:hover { text-shadow: var(--glow); }
+  code { color: var(--amber); }
+
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  @keyframes sweep { from { left: -2%; } to { left: 102%; } }
+  @keyframes flick { 0%, 100% { opacity: 1; } 50% { opacity: 0.78; } }
+  @keyframes pulse { 0%, 100% { box-shadow: inset 0 0 18px rgba(95,227,159,0.10), 0 0 6px rgba(95,227,159,0.3); } 50% { box-shadow: inset 0 0 22px rgba(95,227,159,0.20), 0 0 16px rgba(95,227,159,0.55); } }
+  @keyframes flashin { from { background: rgba(95,227,159,0.18); } to { background: transparent; } }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <h1>lite<b>-</b>dnd</h1>
+      <p class="tag">drag-and-drop primitives that survive DOM reparents // signal-native // zero runtime deps</p>
+    </div>
+    <div class="rack">
+      <span class="chip"><span class="led"></span> lite-dnd <b>v1.0.0</b></span>
+      <span class="chip">on lite-signal <b>v1.1.4</b></span>
+      <span class="chip">+ lite-element <b>v1.0.0</b></span>
+    </div>
+  </header>
+
+  <div class="grid">
+
+    <!-- PANEL 1 -->
+    <section class="panel">
+      <div class="phead">
+        <span class="name">Reparent Stress Test // Sortable</span>
+        <span class="meta">useSortable</span>
+      </div>
+      <div class="pbody">
+        <p class="hint">Set the <b>gain</b>, type a <b>name</b>, watch each channel's <b>uptime</b> tick. Then grab a <b>::</b> handle and drag to reorder. Every channel is a live <code>lite-element</code> component: its state, its running clock, and its DOM instance all ride along through the reorder. In React or Vue, this move destroys and rebuilds the component, resetting all of it.</p>
+
+        <div id="board"></div>
+
+        <div class="readline">
+          <span class="k">DOM order (by channel id)</span>
+          <span class="v seq" id="order-seq">1 2 3</span>
+        </div>
+        <div class="readline" style="margin-top:8px;border-top:none;padding-top:0;">
+          <span class="k">Component rebuilds on reorder</span>
+          <span class="v big ok" id="rebuilds">0</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="col">
+
+      <!-- PANEL 2 -->
+      <section class="panel">
+        <div class="phead">
+          <span class="name">Drag Monitor</span>
+          <span class="meta">activeDrag()</span>
+        </div>
+        <div class="pbody">
+          <p class="hint">A single <code>effect</code> reading the global <b>activeDrag()</b> signal. Live for any drag on the page.</p>
+          <div class="scope">
+            <span class="stamp">trace // pointer</span>
+            <div class="axis h"></div><div class="axis v"></div>
+            <div class="sweep"></div>
+            <div class="dot" id="mon-dot"></div>
+          </div>
+          <div class="mon-rows">
+            <div class="mon-row"><span class="k">status</span><span class="val" id="mon-status">IDLE</span></div>
+            <div class="mon-row"><span class="k">payload</span><span class="val" id="mon-payload">--</span></div>
+            <div class="mon-row"><span class="k">over</span><span class="val" id="mon-over">--</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PANEL 3 -->
+      <section class="panel">
+        <div class="phead">
+          <span class="name">Drop Bus</span>
+          <span class="meta">useDraggable + useDroppable</span>
+        </div>
+        <div class="pbody">
+          <p class="hint">Drag a source into a jack. Jacks <b>accept</b> by type, so a jack only lights when it will take what you are holding.</p>
+          <div class="tokens" id="tokens"></div>
+          <div class="jacks">
+            <div class="jack" id="jackOsc" data-jack="OSC IN">
+              <div class="jname">OSC IN</div>
+              <div class="acc">accepts: sine, square</div>
+              <div class="got" id="gotOsc"></div>
+            </div>
+            <div class="jack" id="jackNoise" data-jack="NOISE IN">
+              <div class="jname">NOISE IN</div>
+              <div class="acc">accepts: noise (predicate)</div>
+              <div class="got" id="gotNoise"></div>
+            </div>
+          </div>
+          <div class="buslog">
+            <div class="lbl">Bus log // onDrop</div>
+            <ul id="log"></ul>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <footer>
+    <span>@zakkster/lite-dnd // MIT // Zahary Shinikchiev</span>
+    <span>running the published bytes via <code>importmap</code> -> node_modules</span>
+  </footer>
+</div>
+
+<script type="module">
+  import { signal, computed, effect } from "@zakkster/lite-signal";
+  import { define } from "@zakkster/lite-element";
+  import { useSortable, useDraggable, useDroppable, activeDrag } from "@zakkster/lite-dnd";
+
+  /* ---------------- Panel 1: stateful channels as lite-element components --------------- */
+
+  let setupCount = 0;
+  const setupSig = signal(0);
+
+  define("scope-channel", (host, scope) => {
+    setupCount++; setupSig.set(setupCount);
+    host.__mountedAt = performance.now();
+    host.__born = setupCount;
+
+    const gain = scope.state(0);
+    const name = scope.state("");
+    host.__gain = gain; host.__name = name; // exposed for inspection / verification parity
+
+    host.innerHTML =
+      '<span class="grip" title="drag to reorder">::</span>' +
+      '<span class="ch">CH<span class="chno"></span></span>' +
+      '<div class="field"><span class="flabel">gain</span><button class="dn" type="button">-</button><output class="gv">0</output><button class="up" type="button">+</button></div>' +
+      '<div class="field"><span class="flabel">uptime</span><output class="ut">0.0s</output></div>' +
+      '<input class="name" type="text" placeholder="name this channel" />' +
+      '<span class="born">born <span class="bornno"></span></span>';
+
+    const q = (s) => host.querySelector(s);
+    q(".chno").textContent = host.dataset.ch || "?";
+    q(".bornno").textContent = "#" + host.__born;
+
+    scope.bind(q(".gv"), "textContent", () => String(gain()));
+    scope.on(q(".up"), "click", () => gain.update((v) => v + 1));
+    scope.on(q(".dn"), "click", () => gain.update((v) => v - 1));
+    scope.on(q(".name"), "input", (e) => name.set(e.target.value));
+  });
+
+  const board = document.getElementById("board");
+  for (let i = 0; i < 3; i++) {
+    const row = document.createElement("scope-channel");
+    row.dataset.ch = String(i + 1);
+    board.appendChild(row); // connectedCallback -> setup runs once here
+  }
+  const MOUNT_BASELINE = setupCount; // 3 after initial mount; reorders must never raise this
+
+  const sortable = useSortable(board, {
+    handle: ".grip",
+    onReorder: (order) => { /* order = new->old index permutation; DOM is already the source of truth */ void order; },
+  });
+
+  // live readouts: channel-id sequence (reactive to order()) + rebuild counter
+  const seqEl = document.getElementById("order-seq");
+  effect(() => {
+    sortable.order(); // track live reorders
+    const kids = board.children;
+    let s = "";
+    for (let i = 0, n = kids.length; i < n; i++) s += (i ? " " : "") + kids[i].dataset.ch;
+    seqEl.textContent = s;
+  });
+  const rebuilds = computed(() => Math.max(0, setupSig() - MOUNT_BASELINE));
+  const rebuildsEl = document.getElementById("rebuilds");
+  effect(() => {
+    const n = rebuilds();
+    rebuildsEl.textContent = String(n);
+    rebuildsEl.classList.toggle("ok", n === 0);
+    rebuildsEl.style.color = n === 0 ? "" : "var(--red)";
+  });
+
+  // one global clock drives every channel's uptime; instances persist across reorder, so it keeps climbing.
+  // Cache-guarded on integer tenths: no string built and no DOM write unless the displayed value changes.
+  (function tickUptimes() {
+    const now = performance.now();
+    const rows = board.children;
+    for (let i = 0, n = rows.length; i < n; i++) {
+      const out = rows[i].querySelector(".ut");
+      if (out && rows[i].__mountedAt != null) {
+        const tenths = Math.floor((now - rows[i].__mountedAt) / 100);
+        if (out.__tenths !== tenths) { out.__tenths = tenths; out.textContent = (tenths / 10).toFixed(1) + "s"; }
+      }
+    }
+    requestAnimationFrame(tickUptimes);
+  })();
+
+  /* ---------------- Panel 2: activeDrag monitor --------------- */
+
+  const monStatus = document.getElementById("mon-status");
+  const monPayload = document.getElementById("mon-payload");
+  const monOver = document.getElementById("mon-over");
+
+  effect(() => {
+    const a = activeDrag();
+    monStatus.textContent = a ? "DRAGGING" : "IDLE";
+    monStatus.classList.toggle("live", !!a);
+    monPayload.textContent = a ? (a.data ? JSON.stringify(a.data) : "channel reorder") : "--";
+    monOver.textContent = a && a.over ? (a.over.dataset.jack || a.over.id || a.over.tagName.toLowerCase()) : "--";
+  });
+
+  // trace dot follows the pointer, but only while a drag is active (gated on activeDrag)
+  const dot = document.getElementById("mon-dot");
+  window.addEventListener("pointermove", (e) => {
+    if (!activeDrag()) { dot.style.opacity = "0"; return; }
+    dot.style.opacity = "1";
+    dot.style.left = e.clientX + "px";
+    dot.style.top = e.clientY + "px";
+  }, true);
+
+  /* ---------------- Panel 3: drag/drop bus --------------- */
+
+  const tokenDefs = [["sine", "SINE"], ["square", "SQUARE"], ["noise", "NOISE"]];
+  const tokensEl = document.getElementById("tokens");
+  for (const [type, label] of tokenDefs) {
+    const chip = document.createElement("div");
+    chip.className = "token"; chip.dataset.type = type; chip.textContent = label;
+    tokensEl.appendChild(chip);
+    const d = useDraggable(chip, { data: { type }, threshold: 3 });
+    // float the chip under the cursor while dragging; snaps back when isDragging clears
+    effect(() => {
+      const { dx, dy } = d.delta();
+      chip.style.transform = d.isDragging() ? "translate(" + dx + "px," + dy + "px)" : "";
+    });
+  }
+
+  function stamp() {
+    const t = new Date();
+    const p = (n) => String(n).padStart(2, "0");
+    return p(t.getHours()) + ":" + p(t.getMinutes()) + ":" + p(t.getSeconds());
+  }
+  const logEl = document.getElementById("log");
+  function log(typeLabel, jackLabel) {
+    const li = document.createElement("li");
+    li.className = "fresh";
+    li.innerHTML = '<span class="t">' + stamp() + '</span>  <span class="a">' + typeLabel + '</span> -> ' + jackLabel;
+    logEl.prepend(li);
+    while (logEl.children.length > 6) logEl.lastChild.remove();
+    setTimeout(() => li.classList.remove("fresh"), 500);
+  }
+
+  function wireJack(id, gotId, accepts, jackLabel) {
+    const el = document.getElementById(id);
+    const got = document.getElementById(gotId);
+    const drop = useDroppable(el, {
+      accepts,
+      onDrop: (data) => {
+        const t = String(data.type).toUpperCase();
+        got.textContent = "captured " + t;
+        log(t, jackLabel);
+      },
+    });
+    effect(() => { el.classList.toggle("hot", drop.isOver()); });
+  }
+  wireJack("jackOsc", "gotOsc", ["sine", "square"], "OSC IN");
+  wireJack("jackNoise", "gotNoise", (data) => data.type === "noise", "NOISE IN");
+</script>
+</body>
+</html>

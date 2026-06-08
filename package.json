@@ -1,0 +1,71 @@
+{
+  "name": "@zakkster/lite-dnd",
+  "version": "1.0.0",
+  "description": "Framework-agnostic drag-and-drop primitives that survive DOM reparents. Window-level pointer tracking, rect-based hit-testing, managed sortable reordering via native insertBefore. Signal-native state on @zakkster/lite-signal. Zero runtime dependencies. Zero per-move JS allocations on the hot path.",
+  "type": "module",
+  "main": "./Dnd.js",
+  "types": "./Dnd.d.ts",
+  "exports": {
+    ".": {
+      "types": "./Dnd.d.ts",
+      "node": "./Dnd.js",
+      "import": "./Dnd.js",
+      "default": "./Dnd.js"
+    }
+  },
+  "files": [
+    "Dnd.js",
+    "Dnd.d.ts",
+    "llms.txt",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "test": "node --test --test-reporter=spec test/*.test.mjs",
+    "verify": "npm test"
+  },
+  "keywords": [
+    "drag-and-drop",
+    "dnd",
+    "draggable",
+    "droppable",
+    "sortable",
+    "reorder",
+    "reparent",
+    "pointer-events",
+    "signals",
+    "reactive",
+    "framework-agnostic",
+    "vanilla",
+    "lite",
+    "zero-dependency",
+    "zero-gc"
+  ],
+  "author": "Zahary Shinikchiev",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PeshoVurtoleta/lite-dnd.git"
+  },
+  "homepage": "https://github.com/PeshoVurtoleta/lite-dnd#readme",
+  "bugs": {
+    "url": "https://github.com/PeshoVurtoleta/lite-dnd/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/PeshoVurtoleta"
+  },
+  "peerDependencies": {
+    "@zakkster/lite-signal": "^1.1.5"
+  },
+  "devDependencies": {
+    "@zakkster/lite-element": "^1.0.0",
+    "@zakkster/lite-signal": "^1.1.5",
+    "happy-dom": "^20.0.0"
+  }
+}
