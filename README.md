@@ -6,6 +6,7 @@
 [![npm bundle size](https://img.shields.io/bundlephobia/minzip/@zakkster/lite-dnd?style=for-the-badge)](https://bundlephobia.com/result?p=@zakkster/lite-dnd)
 [![npm downloads](https://img.shields.io/npm/dm/@zakkster/lite-dnd?style=for-the-badge&color=blue)](https://www.npmjs.com/package/@zakkster/lite-dnd)
 [![npm total downloads](https://img.shields.io/npm/dt/@zakkster/lite-dnd?style=for-the-badge&color=blue)](https://www.npmjs.com/package/@zakkster/lite-dnd)
+[![lite-signal peer](https://img.shields.io/npm/dependency-version/@zakkster/lite-dnd/peer/@zakkster/lite-signal?style=for-the-badge&color=blue)](https://github.com/PeshoVurtoleta/lite-signal)
 [![types](https://img.shields.io/badge/types-included-blue.svg)](./Dnd.d.ts)
 ![Dependencies](https://img.shields.io/badge/runtime%20deps-0-brightgreen?style=flat-square)
 [![license](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
