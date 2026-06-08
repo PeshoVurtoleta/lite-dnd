@@ -1,12 +1,12 @@
 # @zakkster/lite-dnd
 
-[![npm version](https://img.shields.io/npm/v/@zakkster/lite-studio.svg?style=for-the-badge&color=latest)](https://www.npmjs.com/package/@zakkster/lite-studio)
+[![npm version](https://img.shields.io/npm/v/@zakkster/lite-dnd.svg?style=for-the-badge&color=latest)](https://www.npmjs.com/package/@zakkster/lite-dnd)
 ![Zero-GC](https://img.shields.io/badge/Zero--GC-Hot%20path-00C853?style=for-the-badge&logo=leaf&logoColor=white)
 [![sponsor](https://img.shields.io/badge/sponsor-PeshoVurtoleta-ea4aaa.svg?logo=github)](https://github.com/sponsors/PeshoVurtoleta)
-[![npm bundle size](https://img.shields.io/bundlephobia/minzip/@zakkster/lite-studio?style=for-the-badge)](https://bundlephobia.com/result?p=@zakkster/lite-studio)
-[![npm downloads](https://img.shields.io/npm/dm/@zakkster/lite-studio?style=for-the-badge&color=blue)](https://www.npmjs.com/package/@zakkster/lite-studio)
-[![npm total downloads](https://img.shields.io/npm/dt/@zakkster/lite-studio?style=for-the-badge&color=blue)](https://www.npmjs.com/package/@zakkster/lite-studio)
-[![types](https://img.shields.io/badge/types-included-blue.svg)](./Studio.d.ts)
+[![npm bundle size](https://img.shields.io/bundlephobia/minzip/@zakkster/lite-dnd?style=for-the-badge)](https://bundlephobia.com/result?p=@zakkster/lite-dnd)
+[![npm downloads](https://img.shields.io/npm/dm/@zakkster/lite-dnd?style=for-the-badge&color=blue)](https://www.npmjs.com/package/@zakkster/lite-dnd)
+[![npm total downloads](https://img.shields.io/npm/dt/@zakkster/lite-dnd?style=for-the-badge&color=blue)](https://www.npmjs.com/package/@zakkster/lite-dnd)
+[![types](https://img.shields.io/badge/types-included-blue.svg)](./Dnd.d.ts)
 ![Dependencies](https://img.shields.io/badge/runtime%20deps-0-brightgreen?style=flat-square)
 [![license](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 
